@@ -65,9 +65,6 @@ distilled into one student head, which gives `lower` and `upper`.
 ## Track 2 only
 - Does the method call the LLM gateway: not applicable (Track 1).
 
-## Contact
-- Name and email, reachable during the Decision Phase: Leonard Storcks, leonard.storcks@pm.me
-
 ## Notes
 
 **What `train()` does.** It copies the package to `/output/work` and runs our training script `tools/train_final.sh`
