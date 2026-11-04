@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+
+# Data, the organisers' starting kit, and everything training writes stay out of the repository.
+data/
+starting_kit/
+runs/
+build/
+eval/
+*.pth
+*.pt
+*.zip
+*.npz
+submissions/rebuild/
+submissions/*/triton_cache/

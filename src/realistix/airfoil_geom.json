@@ -1,0 +1,9 @@
+{
+ "naca": "4418",
+ "x_le": 0.6,
+ "y_chord": 15.3,
+ "chord": 17.53,
+ "pivot_frac": 0.6,
+ "chord_mm": 60.0,
+ "y_axis": "row index; row 0 is the top (docs/archive/competition_overview.md 3.3)"
+}

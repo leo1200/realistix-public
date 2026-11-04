@@ -1,0 +1,16 @@
+paired against 'rbbase', by fold; the spread across folds is the uncertainty that matters
+
+   fold      rbbase       rbclk
+-------------------------------
+   mim1      74.811      74.793
+   mim2      77.071      77.062
+   mim3      75.069      75.014
+   mim4      75.551      75.513
+-------------------------------
+
+       rbclk  accuracy-only delta -0.011 +/- 0.007 over 4 folds (0/4 positive)  <- inside noise
+              with the sps proxy   -0.030 +/- 0.010 (0/4 positive)  -- comparable to the archive, not to the board
+
+Read the accuracy-only line. `evaluate.subscores` draws a constant 0.15-sigma
+band, not the learned head that ships, so the sps term is a proxy that rewards
+accuracy a second time.

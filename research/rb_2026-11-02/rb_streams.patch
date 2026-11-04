@@ -1,0 +1,182 @@
+diff --git a/src/realistix/gpudata.py b/src/realistix/gpudata.py
+index c56c016..6e44d6c 100644
+--- a/src/realistix/gpudata.py
++++ b/src/realistix/gpudata.py
+@@ -30,7 +30,15 @@ class GPUWindows:
+ 
+     def __init__(self, trajs, split, device="cuda", tag=0, frames="all",
+                  t_extra: int = 0, phases: int = 1, sampling: str = "window",
+-                 dilate_prob: float = 0.0, dilate_factors=(2.0,), dilate_seed: int = 0):
++                 dilate_prob: float = 0.0, dilate_factors=(2.0,), dilate_seed: int = 0,
++                 center: bool = False):
++        # ``center`` (2026-10-28, RealPDEBench foil study): subtract each window's
++        # per-channel mean over the input's valid cells from input and target before
++        # the RMS scale, so the scale becomes the fluctuation RMS. RealPDEBench's foil
++        # is a thin wake on a uniform stream (fluctuations ~1 % of it); under the plain
++        # RMS-speed scale its windows are a constant plus noise to every loss term.
++        # False = the shipped normalisation, untouched.
++        self.center = center
+         # Time dilation (2026-09-10 screen, the owner's idea): with probability
+         # `dilate_prob` a sampled window is re-read from the trajectory at a different
+         # clock -- factor 2 takes every second raw frame (a double-speed window, raw
+@@ -215,8 +223,14 @@ class GPUWindows:
+         # Same definition as the CPU path: RMS speed over the input window's valid
+         # cells, with validity computed window-locally (a trajectory-wide mask would
+         # train on a scale the submission cannot reproduce).
+-        tot = x.pow(2).sum(dim=(1, 2, 3, 4))
+         nz = (x.abs() >= EPS).any(dim=2).any(dim=1)
++        if self.center:
++            v = nz[:, None, None].to(w.dtype)                       # (B, 1, 1, H, W)
++            mu = (x * v).sum(dim=(1, 3, 4), keepdim=True) / (
++                T_IN * v.sum(dim=(3, 4), keepdim=True)).clamp_min(1)
++            w = (w - mu) * v                                        # masked cells stay zero
++            x, y = w[:, :T_IN], w[:, T_IN:T_IN + T_OUT]
++        tot = x.pow(2).sum(dim=(1, 2, 3, 4))
+         scale = (tot / (T_IN * nz.sum(dim=(1, 2)).clamp_min(1))).sqrt() + EPS
+         s = scale[:, None, None, None, None]
+         b = x.shape[0]
+@@ -238,7 +252,19 @@ class MixedGPUWindows:
+     def __init__(self, real_trajs, sim_trajs, device="cuda", frames="all",
+                  t_extra: int = 0, phases: int = 1, sim_batch_frac: float | None = None,
+                  sampling: str = "window", dilate_prob: float = 0.0,
+-                 dilate_factors=(2.0,), dilate_domain: str = "real", dilate_seed: int = 0):
++                 dilate_factors=(2.0,), dilate_domain: str = "real", dilate_seed: int = 0,
++                 extra=(), extra_batch_frac: float = 0.0):
++        # ``extra`` (2026-10-28, RealPDEBench foil study): further GPUWindows streams
++        # (built by the caller with their own tag and ``center``) that take
++        # ``extra_batch_frac`` of every batch, split among them by window counts. The
++        # rest of the batch is drawn exactly as without them, so the release's real:sim
++        # ratio is unchanged. Empty = the shipped sampler, bit for bit.
++        self.extra = list(extra)
++        self.extra_batch_frac = float(extra_batch_frac)
++        if self.extra and not 0 < self.extra_batch_frac < 1:
++            raise ValueError("extra streams need 0 < extra_batch_frac < 1")
++        if self.extra and t_extra:
++            raise ValueError("extra streams do not support t_extra")
+         if dilate_domain not in ("real", "all"):
+             raise ValueError("dilate_domain must be 'real' or 'all'")
+         d_real = dict(dilate_prob=dilate_prob, dilate_factors=dilate_factors,
+@@ -275,6 +301,19 @@ class MixedGPUWindows:
+         return (len(self.real) if self.real else 0) + (len(self.sim) if self.sim else 0)
+ 
+     def sample(self, batch: int, generator=None, angles=None):
++        if not self.extra:
++            return self._sample(batch, generator, angles)
++        if angles is not None:
++            raise ValueError("extra streams do not compose with an angles restriction")
++        n_ext = int(round(batch * self.extra_batch_frac))
++        counts = [e.n_mix for e in self.extra]
++        n_each = [int(round(n_ext * c / sum(counts))) for c in counts[:-1]]
++        n_each.append(n_ext - sum(n_each))
++        parts = [self._sample(batch - n_ext, generator, None)]
++        parts += [e.sample(n, generator) for e, n in zip(self.extra, n_each) if n > 0]
++        return tuple(torch.cat(c) for c in zip(*parts))
++
++    def _sample(self, batch: int, generator=None, angles=None):
+         self._last_y2 = None
+         if self.real is None:
+             return self.sim.sample(batch, generator, angles)
+diff --git a/src/realistix/splits.py b/src/realistix/splits.py
+index b9c9394..c1c20bd 100644
+--- a/src/realistix/splits.py
++++ b/src/realistix/splits.py
+@@ -110,6 +110,35 @@ class Traj:
+         return os.path.join(REAL_DIR if split == "real" else SIM_DIR, self.stem + ".h5")
+ 
+ 
++@dataclass(frozen=True)
++class ExtTraj:
++    """A trajectory from outside the release (2026-10-28, RealPDEBench foil study).
++
++    Same interface as Traj for the GPU sampler, but its file lives in its own
++    directory and it never passes through ``partition``: no fold holdout applies to
++    data that is not ours. Competition rules forbid it in any submission.
++    """
++    re: int
++    aoa: int
++    file: str
++
++    @property
++    def stem(self) -> str:
++        return f"{self.re}_{self.aoa}"
++
++    def path(self, split: str) -> str:
++        return self.file
++
++
++def external(d: str) -> list[ExtTraj]:
++    out = []
++    for fn in sorted(os.listdir(d)):
++        if fn.endswith(".h5"):
++            re_s, aoa_s = fn[:-3].split("_")
++            out.append(ExtTraj(int(re_s), int(aoa_s), os.path.join(d, fn)))
++    return out
++
++
+ # Withdrawn by the organizers on 2026-08-12: train_real/7575_0.h5 reuses the raw
+ # measurements from 6300_0 (u and v are bit-identical; only the stored `re` metadata
+ # differs), and no experiment for Re 7575 at 0 degrees exists. Other angles at that
+diff --git a/tools/train_mixed.py b/tools/train_mixed.py
+index aa68fcf..ec60868 100644
+--- a/tools/train_mixed.py
++++ b/tools/train_mixed.py
+@@ -42,7 +42,7 @@ from torch.utils.data import ConcatDataset, DataLoader
+ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+ from realistix.data import HELDOUT_TAIL, T_IN, WindowDataset, build  # noqa: E402
+-from realistix.gpudata import MixedGPUWindows  # noqa: E402
++from realistix.gpudata import GPUWindows, MixedGPUWindows  # noqa: E402
+ from realistix.evaluate import amp_dtype_for, fmt, predict_all, subscores  # noqa: E402
+ from realistix import losses as rlosses  # noqa: E402
+ from realistix.losses import (CompositeLoss, diff_energy, lead_energy, lowfreq_rel, sps_bulk, sps_oracle,  # noqa: E402
+@@ -328,6 +328,15 @@ def build_parser() -> argparse.ArgumentParser:
+     # near-undetectable afterwards.
+     ap.add_argument("--sim-dir", default=None,
+                     help="alternative train_sim directory (augmented set)")
++    # RealPDEBench foil study (2026-10-28, post-competition; external data, so never in a
++    # submission): converted trajectories (data/realpdebench/convert.py) as extra GPU
++    # streams, real tagged 0 and sim tagged 1, taking --rb-batch-frac of every batch.
++    ap.add_argument("--rb-real-dir", default=None, help="RealPDEBench real trajectories (64x128, dt 0.02)")
++    ap.add_argument("--rb-sim-dir", default=None, help="RealPDEBench simulated trajectories")
++    ap.add_argument("--rb-batch-frac", type=float, default=0.25,
++                    help="share of each batch drawn from the RealPDEBench streams")
++    ap.add_argument("--rb-norm", choices=("center", "rms"), default="center",
++                    help="center: window mean removed, scale = fluctuation RMS; rms: the recipe's scale")
+     # Distillation. Capacity pays on held-out regimes -- width 128 at 12000 steps is
+     # +0.104 on 9/9 Re folds -- but the container charges 1.46x per member for it,
+     # which eats 56% of the gain, and width 160 loses money outright. A student at
+@@ -878,6 +887,9 @@ def main() -> None:
+             ap.error("--sim-loss-frac supports the plain mixed GPU composite+SPS path only")
+         if args.sim_batch_frac is not None and not 0 < round(args.batch * args.sim_batch_frac) < args.batch:
+             ap.error("--sim-loss-frac requires at least one row from each modality")
++    if (args.rb_real_dir or args.rb_sim_dir) and (args.cpu_data or args.aux_p or args.mimo
++                                                   or args.w_unroll or args.meta_alpha):
++        ap.error("--rb-*-dir supports the plain mixed GPU path only")
+     if args.no_film:
+         args.film = False
+     if args.switch_ema and not args.ema:
+@@ -1000,6 +1012,11 @@ def main() -> None:
+             raise SystemExit("--time-dilate is validated for the plain last-frame anchor only")
+         if not 0 <= args.time_dilate <= 1:
+             raise SystemExit("--time-dilate must be a probability")
++        from realistix.splits import external as _external
++        rb_streams = [GPUWindows(_external(d), split, device, tag=tag,
++                                 center=args.rb_norm == "center")
++                      for d, split, tag in ((args.rb_real_dir, "real", 0), (args.rb_sim_dir, "sim", 1))
++                      if d]
+         gpu_ds = MixedGPUWindows(real_trajs, sim_trajs, device,
+                                  frames="head" if HELDOUT_TAIL else "all",
+                                  t_extra=20 if args.w_unroll > 0 else 0,
+@@ -1007,7 +1024,11 @@ def main() -> None:
+                                  sampling=args.sampling,
+                                  dilate_prob=args.time_dilate,
+                                  dilate_factors=tuple(float(v) for v in args.dilate_factors.split(",") if v),
+-                                 dilate_domain=args.dilate_domain, dilate_seed=args.seed)
++                                 dilate_domain=args.dilate_domain, dilate_seed=args.seed,
++                                 extra=rb_streams, extra_batch_frac=args.rb_batch_frac)
++        for e in rb_streams:
++            print(f"RB stream tag={e.tag} center={e.center}: {len(e.fields)} trajectories, "
++                  f"{e.n_mix} windows", flush=True)
+         if args.time_dilate > 0:
+             print(f"time dilation: prob {args.time_dilate}, factors {args.dilate_factors}, "
+                   f"domain {args.dilate_domain}", flush=True)

@@ -1,0 +1,6 @@
+# Training environment of the shipped build (measured 2026-09-24): Python 3.10.20, CUDA 12.1,
+# cuDNN 8.9.2 (8902), a bf16-capable CUDA GPU (built on A100-PCIE-40GB). Install torch from the
+# official cu121 wheel index; numpy and h5py from PyPI. Inference needs only the evaluation image.
+torch==2.2.2+cu121
+numpy==1.26.4
+h5py==3.16.0

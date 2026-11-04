@@ -1,0 +1,22 @@
+paired against 'rbbase', by fold; the spread across folds is the uncertainty that matters
+
+   fold      rbbase      rbreal       rbsim      rbboth     rbbothr
+-------------------------------------------------------------------
+   mim1      74.811      74.753      74.785      74.739      74.812
+   mim2      77.071      77.010      77.034      77.057      77.046
+   mim3      75.069      75.000      75.028      75.012      75.064
+   mim4      75.551      75.505      75.528      75.509      75.520
+-------------------------------------------------------------------
+
+      rbreal  accuracy-only delta -0.014 +/- 0.003 over 4 folds (0/4 positive)  <- real
+              with the sps proxy   -0.058 +/- 0.005 (0/4 positive)  -- comparable to the archive, not to the board
+       rbsim  accuracy-only delta -0.007 +/- 0.003 over 4 folds (1/4 positive)  <- real
+              with the sps proxy   -0.032 +/- 0.004 (0/4 positive)  -- comparable to the archive, not to the board
+      rbboth  accuracy-only delta -0.011 +/- 0.003 over 4 folds (0/4 positive)  <- real
+              with the sps proxy   -0.046 +/- 0.012 (0/4 positive)  -- comparable to the archive, not to the board
+     rbbothr  accuracy-only delta -0.004 +/- 0.004 over 4 folds (2/4 positive)  <- inside noise
+              with the sps proxy   -0.015 +/- 0.008 (1/4 positive)  -- comparable to the archive, not to the board
+
+Read the accuracy-only line. `evaluate.subscores` draws a constant 0.15-sigma
+band, not the learned head that ships, so the sps term is a proxy that rewards
+accuracy a second time.

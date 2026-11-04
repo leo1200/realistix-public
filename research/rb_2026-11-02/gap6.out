@@ -1,0 +1,10 @@
+target angle 20 deg   (median rel err, mean flow / fluct RMS; n = Re with real at both angles)
+  real kept >=  5 deg away (n=15): nearest real 0.205/0.381 | raw sim 0.360/0.980 | transported 0.220/0.362 | sim+gap@d 0.234/0.468
+  real kept >= 10 deg away (n=16): nearest real 0.307/0.558 | raw sim 0.360/0.975 | transported 0.220/0.378 | sim+gap@d 0.363/0.629
+  real kept >= 15 deg away (n=14): nearest real 0.373/0.773 | raw sim 0.359/0.942 | transported 0.215/0.353 | sim+gap@d 0.372/0.850
+  real kept >= 20 deg away (n=14): nearest real 0.391/0.777 | raw sim 0.353/0.979 | transported 0.213/0.374 | sim+gap@d 0.415/0.759
+target angle 0 deg   (median rel err, mean flow / fluct RMS; n = Re with real at both angles)
+  real kept >=  5 deg away (n=12): nearest real 0.082/0.442 | raw sim 0.260/3.036 | transported 0.064/0.363 | sim+gap@d 0.154/1.236
+  real kept >= 10 deg away (n=16): nearest real 0.180/1.387 | raw sim 0.259/3.167 | transported 0.065/0.423 | sim+gap@d 0.196/1.648
+  real kept >= 15 deg away (n=15): nearest real 0.277/1.809 | raw sim 0.253/3.268 | transported 0.063/0.432 | sim+gap@d 0.363/2.190
+  real kept >= 20 deg away (n=14): nearest real 0.387/2.223 | raw sim 0.245/3.118 | transported 0.064/0.383 | sim+gap@d 0.410/2.250
