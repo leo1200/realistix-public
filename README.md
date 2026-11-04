@@ -1,12 +1,9 @@
 # Realistix — sim-to-real forecasting of a turbulent wake
 
-Predicting 0.4 s of a PIV-measured velocity field around a NACA 4418 hydrofoil from the 0.4 s before it, for
-[Track 1 of the NeurIPS 2026 RealPDE competition](https://realpdecompetition.github.io/). The release pairs each
-measured trajectory with a matched CFD run; the private ranking is on unseen Reynolds numbers and angles of attack,
-after the organisers retrain the shortlisted methods from scratch.
+As part of [Track 1 of the NeurIPS 2026 RealPDE competition](https://realpdecompetition.github.io/) we developed a model to predict 0.4 s of a PIV-measured velocity field around a NACA 4418 hydrofoil from the 0.4 s before it across a set of angles of attack and Reynolds numbers.
 
-**Development board: 81.996, rank 9 of 50; invited to the Decision Phase** (training package submitted 2026-10-05,
-`package/`). Decision-Phase results are announced 2026-11-10.
+The goal of the competition was to use simulation data to possibly improve predictions on real data, ideally
+on angles and Reynolds numbers not covered by the real data. In our experiments this turned out to be difficult - the resemblence of the simulation and real data was so weak that interpolation across real data was easier than transfer. The simulation data was useful as a kind of regularization though. More on this is detailed below. Regarding the model, engineering a relatively standard CNN approach with ensembling got us the best results.
 
 ![forecast](docs/forecast.gif)
 
