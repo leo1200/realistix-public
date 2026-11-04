@@ -3,7 +3,9 @@
 As part of [Track 1 of the NeurIPS 2026 RealPDE competition](https://realpdecompetition.github.io/) we developed a model to predict 0.4 s of a PIV-measured velocity field around a NACA 4418 hydrofoil from the 0.4 s before it across a set of angles of attack and Reynolds numbers.
 
 The goal of the competition was to use simulation data to possibly improve predictions on real data, ideally
-on angles and Reynolds numbers not covered by the real data. In our experiments this turned out to be difficult - the resemblence of the simulation and real data was so weak that interpolation across real data was easier than transfer. The simulation data was useful as a kind of regularization though. More on this is detailed below. Regarding the model, engineering a relatively standard CNN approach with ensembling got us the best results.
+on angles and Reynolds numbers not covered by the real data. In our experiments this turned out to be difficult - the resemblence of the simulation and real data was so weak that interpolation across real data was easier than transfer. The simulation data was useful as a kind of regularization though when training was done on simulation and real data simultaneously (pretraining was not helpful, the model can itself differentiate between real and simulated data, a conditioning mechanism with simultaneous training was only marginally helpful if at all). More on this is summarized below.
+
+Regarding the model, engineering a relatively standard CNN approach with ensembling got us the best results.
 
 ![forecast](docs/forecast.gif)
 
